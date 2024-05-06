@@ -2,6 +2,8 @@ import math
 import os
 from dataclasses import dataclass, field
 from typing import List, Union
+import logging
+
 
 import numpy as np
 import PIL.Image
@@ -158,35 +160,62 @@ class TSR(BaseModule):
         self.isosurface_helper = MarchingCubeHelper(resolution)
 
     def extract_mesh(self, scene_codes, resolution: int = 256, threshold: float = 25.0):
-        self.set_marching_cubes_resolution(resolution)
+        logging.info('Starting mesh extraction...')
+        try:
+            self.set_marching_cubes_resolution(resolution)
+        except Exception as e:
+            logging.error('Failed to set marching cubes resolution: %s', e)
+            return None
+
         meshes = []
         for scene_code in scene_codes:
-            with torch.no_grad():
-                density = self.renderer.query_triplane(
-                    self.decoder,
-                    scale_tensor(
-                        self.isosurface_helper.grid_vertices.to(scene_codes.device),
-                        self.isosurface_helper.points_range,
-                        (-self.renderer.cfg.radius, self.renderer.cfg.radius),
-                    ),
-                    scene_code,
-                )["density_act"]
-            v_pos, t_pos_idx = self.isosurface_helper(-(density - threshold))
-            v_pos = scale_tensor(
-                v_pos,
-                self.isosurface_helper.points_range,
-                (-self.renderer.cfg.radius, self.renderer.cfg.radius),
-            )
-            with torch.no_grad():
-                color = self.renderer.query_triplane(
-                    self.decoder,
+            try:
+                with torch.no_grad():
+                    density = self.renderer.query_triplane(
+                        self.decoder,
+                        scale_tensor(
+                            self.isosurface_helper.grid_vertices.to(scene_codes.device),
+                            self.isosurface_helper.points_range,
+                            (-self.renderer.cfg.radius, self.renderer.cfg.radius),
+                        ),
+                        scene_code,
+                    )["density_act"]
+            except Exception as e:
+                logging.error('Failed to query triplane for density: %s', e)
+                continue
+
+            try:
+                v_pos, t_pos_idx = self.isosurface_helper(-(density - threshold))
+                v_pos = scale_tensor(
                     v_pos,
-                    scene_code,
-                )["color"]
-            mesh = trimesh.Trimesh(
-                vertices=v_pos.cpu().numpy(),
-                faces=t_pos_idx.cpu().numpy(),
-                vertex_colors=color.cpu().numpy(),
-            )
-            meshes.append(mesh)
+                    self.isosurface_helper.points_range,
+                    (-self.renderer.cfg.radius, self.renderer.cfg.radius),
+                )
+            except Exception as e:
+                logging.error('Failed to calculate v_pos and t_pos_idx: %s', e)
+                continue
+
+            try:
+                with torch.no_grad():
+                    color = self.renderer.query_triplane(
+                        self.decoder,
+                        v_pos,
+                        scene_code,
+                    )["color"]
+            except Exception as e:
+                logging.error('Failed to query triplane for color: %s', e)
+                continue
+
+            try:
+                mesh = trimesh.Trimesh(
+                    vertices=v_pos.cpu().numpy(),
+                    faces=t_pos_idx.cpu().numpy(),
+                    vertex_colors=color.cpu().numpy(),
+                )
+                meshes.append(mesh)
+            except Exception as e:
+                logging.error('Failed to create and append mesh: %s', e)
+                continue
+
+        logging.info('Mesh extraction completed.')
         return meshes
