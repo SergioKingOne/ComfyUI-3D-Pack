@@ -152,12 +152,18 @@ class TSR(BaseModule):
         return images
 
     def set_marching_cubes_resolution(self, resolution: int):
-        if (
-            self.isosurface_helper is not None
-            and self.isosurface_helper.resolution == resolution
-        ):
-            return
-        self.isosurface_helper = MarchingCubeHelper(resolution)
+        logging.info('Setting marching cubes resolution...')
+        try:
+            if (
+                self.isosurface_helper is not None
+                and self.isosurface_helper.resolution == resolution
+            ):
+                logging.info('Marching cubes resolution is already set to the desired value.')
+                return
+            self.isosurface_helper = MarchingCubeHelper(resolution)
+            logging.info('Marching cubes resolution set successfully.')
+        except Exception as e:
+            logging.error('Failed to set marching cubes resolution: %s', e)
 
     def extract_mesh(self, scene_codes, resolution: int = 256, threshold: float = 25.0):
         logging.info('Starting mesh extraction...')

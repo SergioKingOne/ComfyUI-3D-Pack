@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torchmcubes import marching_cubes
-
+import logging
 
 class IsosurfaceHelper(nn.Module):
     points_range: Tuple[float, float] = (0, 1)
@@ -16,10 +16,15 @@ class IsosurfaceHelper(nn.Module):
 
 class MarchingCubeHelper(IsosurfaceHelper):
     def __init__(self, resolution: int) -> None:
-        super().__init__()
-        self.resolution = resolution
-        self.mc_func: Callable = marching_cubes
-        self._grid_vertices: Optional[torch.FloatTensor] = None
+        logging.info('Initializing MarchingCubeHelper...')
+        try:
+            super().__init__()
+            self.resolution = resolution
+            self.mc_func: Callable = marching_cubes
+            self._grid_vertices: Optional[torch.FloatTensor] = None
+            logging.info('MarchingCubeHelper initialized successfully.')
+        except Exception as e:
+            logging.error('Failed to initialize MarchingCubeHelper: %s', e)
 
     @property
     def grid_vertices(self) -> torch.FloatTensor:
